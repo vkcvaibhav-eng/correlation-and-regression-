@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from scipy.stats import pearsonr
 import numpy as np
-import io
+import io # Added for downloading files
 
 st.set_page_config(page_title="Statistical Analysis App", layout="wide")
 
@@ -22,7 +22,8 @@ if uploaded_file is not None:
             df = pd.read_csv(uploaded_file)
         else:
             df = pd.read_excel(uploaded_file)
-        st.success("Data loaded. Proceed with analysis.")
+        st.success("Data loaded successfully.")
+        st.write(df.head())
     except Exception as e:
         st.error(f"Failed to read file: {e}. Check your formatting.")
         st.stop()
@@ -33,6 +34,7 @@ if uploaded_file is not None:
     
     target_var = st.selectbox("Select Dependent Variable (Y)", options=columns)
     
+    # Remove target from independent options
     indep_options = [col for col in columns if col != target_var]
     predictor_vars = st.multiselect("Select Independent Variables (X)", options=indep_options, default=indep_options)
 
@@ -50,51 +52,44 @@ if uploaded_file is not None:
     # Correlation Analysis
     st.subheader("2. Correlation Analysis & Heatmap")
     
+    col1, col2 = st.columns([1, 1])
+    
     # Calculate Correlation and P-values
     corr_matrix = df_selected.corr()
     p_values = pd.DataFrame(index=df_selected.columns, columns=df_selected.columns)
-    
+    annot_matrix = pd.DataFrame(index=df_selected.columns, columns=df_selected.columns)
+
     for r in df_selected.columns:
         for c in df_selected.columns:
+            corr_val = corr_matrix.loc[r, c]
             if r == c:
                 p_values.loc[r, c] = 0.0
+                annot_matrix.loc[r, c] = f"{corr_val:.2f}"
             else:
                 _, p = pearsonr(df_selected[r], df_selected[c])
                 p_values.loc[r, c] = p
-
-    # Create annotation matrix with asterisks
-    annot_labels = np.empty_like(corr_matrix, dtype=str)
-    for i in range(corr_matrix.shape[0]):
-        for j in range(corr_matrix.shape[1]):
-            val = corr_matrix.iloc[i, j]
-            p_val = p_values.iloc[i, j]
-            
-            if i == j:
-                stars = ""
-            elif p_val <= 0.001:
-                stars = "***"
-            elif p_val <= 0.01:
-                stars = "**"
-            elif p_val <= 0.05:
-                stars = "*"
-            else:
-                stars = ""
                 
-            annot_labels[i, j] = f"{val:.2f}{stars}"
-
-    col1, col2 = st.columns([1.5, 1])
+                # Add significance stars (* p<0.05, ** p<0.01)
+                stars = ""
+                if p < 0.01:
+                    stars = "**"
+                elif p < 0.05:
+                    stars = "*"
+                
+                annot_matrix.loc[r, c] = f"{corr_val:.2f}{stars}"
     
     with col1:
-        st.markdown("**Correlation Matrix (with Significance)**")
-        st.markdown("*p≤0.05, **p≤0.01, ***p≤0.001")
+        st.markdown("**Correlation Matrix (* p<0.05, ** p<0.01)**")
         
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.heatmap(corr_matrix, annot=annot_labels, fmt="", cmap="coolwarm", linewidths=0.5, ax=ax, annot_kws={"size": 10})
-        st.pyplot(fig)
+        # Plot Heatmap
+        fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
+        # Note: fmt="" is required here because we are passing strings (numbers + stars)
+        sns.heatmap(corr_matrix, annot=annot_matrix, cmap="coolwarm", fmt="", linewidths=0.5, ax=ax_corr)
+        st.pyplot(fig_corr)
         
-        # Download button for Heatmap
+        # Download Button for Heatmap
         buf = io.BytesIO()
-        fig.savefig(buf, format="png", bbox_inches='tight', dpi=300)
+        fig_corr.savefig(buf, format="png", bbox_inches="tight", dpi=300)
         st.download_button(
             label="Download Heatmap (PNG)",
             data=buf.getvalue(),
@@ -103,7 +98,9 @@ if uploaded_file is not None:
         )
         
     with col2:
-        st.markdown("**Exact P-values**")
+        st.markdown("**Statistical Significance (p-values)**")
+        st.markdown("Exact p-values for reference.")
+        # Format p-values to scientific notation for readability
         st.dataframe(p_values.astype(float).style.format("{:.4e}"))
 
     st.markdown("---")
@@ -120,28 +117,31 @@ if uploaded_file is not None:
     try:
         model = sm.OLS(Y, X_with_const).fit()
         
-        # Construct Regression Equation
+        # Build Regression Equation String
         params = model.params
         r_squared = model.rsquared
         
-        eq_parts = [f"{params.iloc[0]:.4f}"] # Intercept
-        for i, col_name in enumerate(X.columns):
-            coef = params.iloc[i+1]
-            sign = "+" if coef >= 0 else "-"
-            eq_parts.append(f"{sign} {abs(coef):.4f}({col_name})")
+        eq_parts = []
+        if 'const' in params:
+            eq_parts.append(f"{params['const']:.4f}")
             
-        equation_str = f"Y = {' '.join(eq_parts)} (R² = {r_squared:.4f})"
+        for name, coef in params.items():
+            if name != 'const':
+                sign = "+" if coef >= 0 else "-"
+                eq_parts.append(f"{sign} {abs(coef):.4f}({name})")
+                
+        equation_str = f"**Y ({target_var}) = " + " ".join(eq_parts) + f"**  *(R² = {r_squared:.4f})*"
         
-        st.markdown("**Regression Equation:**")
-        st.info(equation_str)
+        st.markdown("### Regression Equation")
+        st.markdown(equation_str)
         
         st.text(model.summary())
         
-        # Download button for Regression Summary
-        summary_download_text = f"Regression Equation:\n{equation_str}\n\n{model.summary().as_text()}"
+        # Download Button for Regression Summary
+        summary_text = f"Regression Equation:\nY = {' '.join(eq_parts)} (R-squared = {r_squared:.4f})\n\n{model.summary().as_text()}"
         st.download_button(
             label="Download Regression Summary (TXT)",
-            data=summary_download_text,
+            data=summary_text,
             file_name="regression_summary.txt",
             mime="text/plain"
         )
