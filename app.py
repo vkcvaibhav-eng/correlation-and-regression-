@@ -77,11 +77,6 @@ if uploaded_file is not None:
         st.warning("Select at least one independent variable.")
         st.stop()
 
-    df_selected = df[[target_var] + predictor_vars].dropna()
-    if df_selected.empty:
-        st.error("Your selected columns contain too many missing values. Clean your data.")
-        st.stop()
-
     st.markdown("---")
     
     # Publication-Ready Correlation Table (Target vs Predictors)
@@ -93,6 +88,30 @@ if uploaded_file is not None:
         corr_method = st.selectbox("Select Correlation Method", ["Pearson (Parametric)", "Spearman (Non-Parametric Rank)"])
     with col_label:
         column_label = st.text_input("Data Column Label (e.g., Year, Location, or 'Correlation (r)')", value="2025")
+
+    # --- EDUCATIONAL GUIDE EXPANDER ---
+    with st.expander("🤔 Which method should I choose? (Pearson vs. Spearman)"):
+        st.markdown("""
+        ### 1. Pearson Correlation (The "Straight Line" Test)
+        Pearson measures how well your data fits a perfectly **straight line** (a linear relationship).
+        * **How it works:** It uses the actual raw, numerical values of your data to calculate the relationship.
+        * **The Catch:** It assumes your data is normally distributed (parametric) and moves at a constant rate. It is also highly sensitive to outliers—one weird data point can throw off your entire result.
+        * **When to use it:** When you are confident your variables increase or decrease together at a steady, constant pace.
+
+        ### 2. Spearman Correlation (The "Directional" Test)
+        Spearman measures whether variables move in the same **direction**, regardless of the exact rate (a monotonic relationship).
+        * **How it works:** Instead of using the raw numbers, it ranks your data from lowest to highest (1st, 2nd, 3rd...) and calculates the correlation of those ranks.
+        * **The Catch:** Because it uses ranks instead of raw values, it is considered non-parametric. It doesn't care if your data is normally distributed, and it easily ignores extreme outliers.
+        * **When to use it:** When your data doesn't follow a perfect straight line but still trends together.
+
+        ---
+        ### 🐛 A Practical Example
+        Imagine you are tracking a mite population against rising daily temperatures:
+        * **Scenario A:** For every 1°C increase, the population increases by exactly 50 mites. This is a perfect **linear** relationship. Both Pearson and Spearman will show a high correlation (near 1.0).
+        * **Scenario B:** As the temperature rises, the population explodes exponentially. It goes up by 10 mites, then 50, then 500. The relationship is always going *up*, but the rate of growth is accelerating. **Spearman** will still show a near-perfect 1.0 correlation because the ranks are perfectly aligned (higher temp = higher rank in population). **Pearson**, however, will give a much lower score because the data forms a curve, not a straight line.
+        """)
+
+    df_selected = df[[target_var] + predictor_vars].dropna()
 
     # Calculate 1-to-many correlation
     table_results = []
