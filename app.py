@@ -245,7 +245,8 @@ if uploaded_file is not None:
             color = 'lightgreen' if val < 0.05 else ''
             return f'background-color: {color}'
             
-        formatted_coef_df = coef_df.style.applymap(highlight_pvals, subset=['P > |t|']).format({
+        # FIXED: Changed 'applymap' to 'map' for newer Pandas versions
+        formatted_coef_df = coef_df.style.map(highlight_pvals, subset=['P > |t|']).format({
             "Coefficient": "{:.4f}",
             "Std Error": "{:.4f}",
             "t-value": "{:.3f}",
