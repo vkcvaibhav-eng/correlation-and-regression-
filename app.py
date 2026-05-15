@@ -106,9 +106,9 @@ if uploaded_file is not None:
 
         ---
         ### 🐛 A Practical Example
-        Imagine you are tracking a mite population against rising daily temperatures:
-        * **Scenario A:** For every 1°C increase, the population increases by exactly 50 mites. This is a perfect **linear** relationship. Both Pearson and Spearman will show a high correlation (near 1.0).
-        * **Scenario B:** As the temperature rises, the population explodes exponentially. It goes up by 10 mites, then 50, then 500. The relationship is always going *up*, but the rate of growth is accelerating. **Spearman** will still show a near-perfect 1.0 correlation because the ranks are perfectly aligned (higher temp = higher rank in population). **Pearson**, however, will give a much lower score because the data forms a curve, not a straight line.
+        Imagine you are tracking a pest population against rising daily temperatures:
+        * **Scenario A:** For every 1°C increase, the population increases by exactly 50. This is a perfect **linear** relationship. Both Pearson and Spearman will show a high correlation (near 1.0).
+        * **Scenario B:** As the temperature rises, the population explodes exponentially. It goes up by 10, then 50, then 500. The relationship is always going *up*, but the rate of growth is accelerating. **Spearman** will still show a near-perfect 1.0 correlation because the ranks are perfectly aligned (higher temp = higher rank in population). **Pearson**, however, will give a much lower score because the data forms a curve, not a straight line.
         """)
 
     df_selected = df[[target_var] + predictor_vars].dropna()
@@ -206,7 +206,7 @@ if uploaded_file is not None:
     st.markdown("---")
     
     # Regression Analysis
-    st.subheader("4. Multiple Linear Regression")
+    st.subheader("4. Multiple Linear Regression (OLS)")
     
     X = df_selected[predictor_vars]
     Y = df_selected[target_var]
@@ -216,25 +216,92 @@ if uploaded_file is not None:
     try:
         model = sm.OLS(Y, X_with_const).fit()
         
-        params = model.params
-        r_squared = model.rsquared
+        # --- 1. Clean Summary Stats ---
+        st.markdown("#### Model Summary Statistics")
+        col_r, col_ar, col_f, col_p = st.columns(4)
+        col_r.metric("R-squared", f"{model.rsquared:.3f}")
+        col_ar.metric("Adj. R-squared", f"{model.rsquared_adj:.3f}")
+        col_f.metric("F-statistic", f"{model.fvalue:.3f}")
+        col_p.metric("Prob (F-stat)", f"{model.f_pvalue:.4e}")
         
-        eq_parts = []
-        if 'const' in params:
-            eq_parts.append(f"{params['const']:.4f}")
+        # --- 2. Clean Coefficients Table ---
+        st.markdown("#### Coefficients Table")
+        
+        # Extract data into a clean dataframe
+        coef_df = pd.DataFrame({
+            "Coefficient": model.params,
+            "Std Error": model.bse,
+            "t-value": model.tvalues,
+            "P > |t|": model.pvalues
+        })
+        
+        # Add Confidence Intervals
+        conf_int = model.conf_int()
+        coef_df["[0.025"] = conf_int[0]
+        coef_df["0.975]"] = conf_int[1]
+        
+        # Format the dataframe for display
+        def highlight_pvals(val):
+            color = 'lightgreen' if val < 0.05 else ''
+            return f'background-color: {color}'
             
-        for name, coef in params.items():
+        formatted_coef_df = coef_df.style.applymap(highlight_pvals, subset=['P > |t|']).format({
+            "Coefficient": "{:.4f}",
+            "Std Error": "{:.4f}",
+            "t-value": "{:.3f}",
+            "P > |t|": "{:.4f}",
+            "[0.025": "{:.4f}",
+            "0.975]": "{:.4f}"
+        })
+        
+        st.dataframe(formatted_coef_df, use_container_width=True)
+        st.caption("Rows highlighted in green indicate statistically significant variables (P < 0.05).")
+
+        # --- 3. Automated Interpretation Guide ---
+        st.markdown("### 🧠 Automated Interpretation Guide")
+        
+        # Overall Model Health
+        if model.f_pvalue < 0.05:
+            st.success(f"**Overall Model Health:** Good. The Prob (F-statistic) is {model.f_pvalue:.4f}, which is less than 0.05. This means your independent variables, taken together, reliably predict changes in '{target_var}'.")
+        else:
+            st.error(f"**Overall Model Health:** Poor. The Prob (F-statistic) is {model.f_pvalue:.4f}, which is greater than 0.05. This model is not statistically significant.")
+
+        st.info(f"**Variance Explained:** Your R-squared is {model.rsquared:.3f}. This means {model.rsquared*100:.1f}% of the variance in '{target_var}' is explained by your selected parameters. (Note: Look at Adj. R-squared ({model.rsquared_adj:.3f}) if you have a small dataset with many variables, as R-squared can be artificially inflated).")
+
+        # Significant Variables
+        sig_vars = coef_df[coef_df["P > |t|"] < 0.05].index.tolist()
+        if "const" in sig_vars:
+            sig_vars.remove("const")
+            
+        st.markdown("**Specific Parameter Impacts:**")
+        if len(sig_vars) > 0:
+            for var in sig_vars:
+                coef_val = coef_df.loc[var, 'Coefficient']
+                direction = "increases" if coef_val > 0 else "decreases"
+                st.markdown(f"* **{var}:** Significant (P = {coef_df.loc[var, 'P > |t|']:.4f}). Assuming all other parameters are held constant, for every 1 unit increase in {var}, the {target_var} **{direction}** by {abs(coef_val):.4f} units.")
+        else:
+            st.markdown("* *None of the individual predictor variables are statistically significant (P < 0.05) in this specific combination.*")
+
+        # Predictive Equation
+        eq_parts = []
+        if 'const' in model.params:
+            eq_parts.append(f"{model.params['const']:.4f}")
+        for name, coef in model.params.items():
             if name != 'const':
                 sign = "+" if coef >= 0 else "-"
                 eq_parts.append(f"{sign} {abs(coef):.4f}({name})")
                 
-        equation_str = f"**Y ({target_var}) = " + " ".join(eq_parts) + f"** *(R² = {r_squared:.4f})*"
+        equation_str = f"**{target_var} = " + " ".join(eq_parts) + "**"
         
-        st.markdown("### Regression Equation")
+        st.markdown("---")
+        st.markdown("### 🧮 Predictive Equation")
         st.markdown(equation_str)
-        st.text(model.summary())
         
-        summary_text = f"Regression Equation:\nY = {' '.join(eq_parts)} (R-squared = {r_squared:.4f})\n\n{model.summary().as_text()}"
+        # Expander for Raw Output
+        with st.expander("View Raw OLS Summary (Classic statsmodels output)"):
+            st.text(model.summary())
+            
+        summary_text = f"Regression Equation:\n{target_var} = {' '.join(eq_parts)} \n\n{model.summary().as_text()}"
         st.download_button(
             label="Download Regression Summary (TXT)",
             data=summary_text,
@@ -245,7 +312,7 @@ if uploaded_file is not None:
         st.markdown("**Residual Diagnostics**")
         fig_resid, ax_resid = plt.subplots(figsize=(8, 4))
         sns.histplot(model.resid, kde=True, ax=ax_resid)
-        ax_resid.set_title("Residual Distribution")
+        ax_resid.set_title("Residual Distribution (Should ideally look like a bell curve)")
         st.pyplot(fig_resid)
         
     except Exception as e:
