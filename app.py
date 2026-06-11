@@ -451,7 +451,32 @@ if uploaded_file is not None:
                     sign = "+" if coef >= 0 else "-"
                     step_eq_parts.append(f"{sign} {abs(coef):.4f}({name})")
 
-            st.success(f"**Final Predictive Equation (Cleaned of Multicollinearity):**\n\n**{target_var} = " + " ".join(step_eq_parts) + "**")
+            final_equation_str = f"{target_var} = " + " ".join(step_eq_parts)
+            st.success(f"**Final Predictive Equation (Cleaned of Multicollinearity):**\n\n**{final_equation_str}**")
+
+            # ==========================================
+            # 6. EDUCATIONAL INTERPRETATION FOR STUDENTS
+            # ==========================================
+            st.markdown("---")
+            st.info("### How to Interpret and Report These Results")
+
+            st.markdown(f"""
+            #### 1. Understanding the Equation
+            The equation above tells the biological story of how the selected predictors impact the **{target_var}**.
+            * **The Constant:** This is the baseline starting point (the mathematical anchor).
+            * **The Signs (+ or -):** A positive **(+)** sign means the predictor increases the **{target_var}**. A negative **(-)** sign means the predictor decreases the **{target_var}**.
+            * **The Numbers (Coefficients):** This represents the exact change in **{target_var}** for every 1-unit change in that specific predictor, while the other predictors in the model are held constant.
+
+            #### 2. Understanding the R-squared ({stepwise_model.rsquared:.2f})
+            An R-squared value of **{stepwise_model.rsquared:.2f}** means that **{stepwise_model.rsquared*100:.1f}%** of the variation in **{target_var}** is explained by the specific predictors left in this refined model. The remaining **{100 - stepwise_model.rsquared*100:.1f}%** represents unexplained variation, such as natural environmental noise, unmeasured factors, or biological variability.
+
+            #### 3. How to report this in your findings
+            You can copy and paste the following template directly into your thesis, project report, or publication draft:
+            """)
+
+            report_template = f"The stepwise regression model yielded a refined predictive equation (R-squared = {stepwise_model.rsquared:.2f}), indicating that {stepwise_model.rsquared*100:.1f}% of the variation in {target_var} is explained by this specific combination of selected predictors. The final predictive equation was formulated as: {final_equation_str}."
+
+            st.code(report_template, language="text")
 
         else:
             st.warning("After backward elimination, no variables were found to be statistically significant at the P < 0.05 level.")
