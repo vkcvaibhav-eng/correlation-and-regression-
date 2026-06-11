@@ -215,14 +215,15 @@ if uploaded_file is not None:
             ax=ax_corr,
             vmin=-1,
             vmax=1,
-            annot_kws={"size": heatmap_font_size}
+            annot_kws={"size": heatmap_font_size, "fontfamily": "Times New Roman"}
         )
         ax_corr.tick_params(axis='x', labelsize=heatmap_font_size)
         ax_corr.tick_params(axis='y', labelsize=heatmap_font_size)
-        plt.setp(ax_corr.get_xticklabels(), rotation=45, ha="right")
-        plt.setp(ax_corr.get_yticklabels(), rotation=0)
+        plt.setp(ax_corr.get_xticklabels(), rotation=45, ha="right", fontfamily="Times New Roman")
+        plt.setp(ax_corr.get_yticklabels(), rotation=0, fontfamily="Times New Roman")
         if ax_corr.collections and ax_corr.collections[0].colorbar:
             ax_corr.collections[0].colorbar.ax.tick_params(labelsize=heatmap_font_size)
+            plt.setp(ax_corr.collections[0].colorbar.ax.get_yticklabels(), fontfamily="Times New Roman")
         st.pyplot(fig_corr)
         
         buf = io.BytesIO()
