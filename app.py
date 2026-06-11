@@ -469,7 +469,23 @@ if uploaded_file is not None:
 
             #### 2. Understanding the R-squared ({stepwise_model.rsquared:.2f})
             An R-squared value of **{stepwise_model.rsquared:.2f}** means that **{stepwise_model.rsquared*100:.1f}%** of the variation in **{target_var}** is explained by the specific predictors left in this refined model. The remaining **{100 - stepwise_model.rsquared*100:.1f}%** represents unexplained variation, such as natural environmental noise, unmeasured factors, or biological variability.
+            """)
 
+            # --- R-SQUARED REFERENCE TABLE ---
+            st.markdown("**Reference: Acceptable R-squared Ranges in Agricultural Entomology**")
+            r2_guide_data = {
+                "R-squared Range": ["> 0.70", "0.50 - 0.70", "0.30 - 0.50", "< 0.30"],
+                "Interpretation for Biological Data": [
+                    "Excellent: Very strong predictive power. Usually seen in highly controlled lab or greenhouse settings.",
+                    "Good: Strong biological relationship. Excellent outcome for field-level screening trials.",
+                    "Moderate/Acceptable: Very common for field ecological data due to high environmental noise such as weather, predators, and microclimate variation.",
+                    "Weak: A trend exists if P < 0.05, but the pest population is mostly driven by unmeasured factors."
+                ]
+            }
+            r2_df = pd.DataFrame(r2_guide_data)
+            st.table(r2_df.set_index("R-squared Range"))
+
+            st.markdown(f"""
             #### 3. How to report this in your findings
             You can copy and paste the following template directly into your thesis, project report, or publication draft:
             """)
