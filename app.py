@@ -315,6 +315,100 @@ if uploaded_file is not None:
         sns.histplot(model.resid, kde=True, ax=ax_resid)
         ax_resid.set_title("Residual Distribution (Should ideally look like a bell curve)")
         st.pyplot(fig_resid)
+
+        # ==========================================
+        # 5. STEPWISE REGRESSION (BACKWARD ELIMINATION)
+        # ==========================================
+        st.markdown("---")
+        st.subheader("5. Stepwise Regression (Automated Feature Selection)")
+
+        # --- Educational Explanation for the User ---
+        st.info("""
+        **What is the Multicollinearity Issue?**
+        In agricultural data, plant traits often grow proportionally together (e.g., as the panicle gets longer, the flag leaf also gets longer). When you put these highly correlated traits into a standard regression model, the math gets "confused."
+        * **The Result:** The overall model will say "Yes, these traits affect the pest population," but the individual P-values will show that *none* of them are significant. The model cannot figure out which specific trait deserves the credit.
+
+        **Why use Stepwise Regression?**
+        To fix this overlap, we use **Stepwise Regression (Backward Elimination)**.
+        Instead of guessing which variables to keep, this algorithm acts as an automatic filter. It starts with all your variables and removes the least significant one (highest P-value). It recalculates the model and repeats this process until only the strictly significant, independent drivers (P < 0.05) remain.
+        """)
+
+        # Backward Elimination Algorithm
+        def backward_elimination(data, target, significance_level=0.05):
+            features = data.columns.tolist()
+            elimination_history = []
+
+            while len(features) > 0:
+                features_with_constant = sm.add_constant(data[features])
+                temp_model = sm.OLS(target, features_with_constant).fit()
+                p_values = temp_model.pvalues[1:]  # Exclude the constant's p-value
+                max_p_value = p_values.max()
+
+                if max_p_value >= significance_level:
+                    excluded_feature = p_values.idxmax()
+                    features.remove(excluded_feature)
+                    elimination_history.append((excluded_feature, max_p_value))
+                else:
+                    break
+
+            return features, elimination_history
+
+        # Run the algorithm
+        final_features, history = backward_elimination(X, Y, 0.05)
+
+        # Display what was removed
+        if history:
+            st.markdown("**Variables Automatically Removed to fix Multicollinearity:**")
+            for var, p_val in history:
+                st.write(f"- Dropped `{var}` (P-value: {p_val:.4f})")
+        else:
+            st.success("No variables were dropped. All initial predictors are statistically significant!")
+
+        # Fit the Final Stepwise Model
+        if len(final_features) > 0:
+            st.markdown(f"#### Final Refined Model for predicting '{target_var}'")
+
+            X_stepwise = X[final_features]
+            X_stepwise_const = sm.add_constant(X_stepwise)
+            stepwise_model = sm.OLS(Y, X_stepwise_const).fit()
+
+            # Clean Stats for Stepwise Model
+            col_rs, col_ars, col_fs, col_ps = st.columns(4)
+            col_rs.metric("Final R-squared", f"{stepwise_model.rsquared:.3f}")
+            col_ars.metric("Final Adj. R-squared", f"{stepwise_model.rsquared_adj:.3f}")
+            col_fs.metric("F-statistic", f"{stepwise_model.fvalue:.3f}")
+            col_ps.metric("Prob (F-stat)", f"{stepwise_model.f_pvalue:.4e}")
+
+            # Coefficients Table
+            step_coef_df = pd.DataFrame({
+                "Coefficient": stepwise_model.params,
+                "Std Error": stepwise_model.bse,
+                "t-value": stepwise_model.tvalues,
+                "P > |t|": stepwise_model.pvalues
+            })
+
+            formatted_step_coef_df = step_coef_df.style.map(highlight_pvals, subset=['P > |t|']).format({
+                "Coefficient": "{:.4f}",
+                "Std Error": "{:.4f}",
+                "t-value": "{:.3f}",
+                "P > |t|": "{:.4f}"
+            })
+
+            st.dataframe(formatted_step_coef_df, use_container_width=True)
+
+            # Generate Final Equation
+            step_eq_parts = []
+            if 'const' in stepwise_model.params:
+                step_eq_parts.append(f"{stepwise_model.params['const']:.4f}")
+            for name, coef in stepwise_model.params.items():
+                if name != 'const':
+                    sign = "+" if coef >= 0 else "-"
+                    step_eq_parts.append(f"{sign} {abs(coef):.4f}({name})")
+
+            st.success(f"**Final Predictive Equation (Cleaned of Multicollinearity):**\n\n**{target_var} = " + " ".join(step_eq_parts) + "**")
+
+        else:
+            st.warning("After backward elimination, no variables were found to be statistically significant at the P < 0.05 level.")
         
     except Exception as e:
         st.error(f"Regression failed: {e}. Check for multicollinearity or constant variables.")
