@@ -151,6 +151,25 @@ if uploaded_file is not None:
     
     # Heatmap & Cross-Correlation
     st.subheader("3. Cross-Correlation Analysis & Heatmap")
+
+    st.markdown("**Heatmap Editing Options**")
+    cmap_options = {
+        "Coolwarm (Default)": "coolwarm",
+        "Viridis": "viridis",
+        "Magma": "magma",
+        "YlGnBu": "YlGnBu",
+        "RdYlGn": "RdYlGn",
+        "Spectral": "Spectral",
+        "Blues": "Blues",
+        "Greens": "Greens"
+    }
+    heatmap_style_col, heatmap_font_col = st.columns(2)
+    with heatmap_style_col:
+        selected_cmap_label = st.selectbox("Select Heatmap Colour Palette", options=list(cmap_options.keys()))
+    with heatmap_font_col:
+        heatmap_font_size = st.slider("Select Heatmap Font Size", min_value=8, max_value=20, value=10, step=1)
+
+    selected_cmap = cmap_options[selected_cmap_label]
     
     col1, col2 = st.columns([1, 1])
     
@@ -187,7 +206,23 @@ if uploaded_file is not None:
     with col1:
         st.markdown("**Correlation Matrix (* p<0.05, ** p<0.01)**")
         fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
-        sns.heatmap(corr_matrix, annot=annot_matrix, cmap="coolwarm", fmt="", linewidths=0.5, ax=ax_corr, vmin=-1, vmax=1)
+        sns.heatmap(
+            corr_matrix,
+            annot=annot_matrix,
+            cmap=selected_cmap,
+            fmt="",
+            linewidths=0.5,
+            ax=ax_corr,
+            vmin=-1,
+            vmax=1,
+            annot_kws={"size": heatmap_font_size}
+        )
+        ax_corr.tick_params(axis='x', labelsize=heatmap_font_size)
+        ax_corr.tick_params(axis='y', labelsize=heatmap_font_size)
+        plt.setp(ax_corr.get_xticklabels(), rotation=45, ha="right")
+        plt.setp(ax_corr.get_yticklabels(), rotation=0)
+        if ax_corr.collections and ax_corr.collections[0].colorbar:
+            ax_corr.collections[0].colorbar.ax.tick_params(labelsize=heatmap_font_size)
         st.pyplot(fig_corr)
         
         buf = io.BytesIO()
