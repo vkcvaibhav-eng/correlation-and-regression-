@@ -215,6 +215,33 @@ if uploaded_file is not None:
     
     try:
         model = sm.OLS(Y, X_with_const).fit()
+
+        # Check multicollinearity before trusting the OLS predictive equation.
+        vif_df = pd.DataFrame()
+        high_vif_df = pd.DataFrame()
+        has_multicollinearity = False
+
+        if len(predictor_vars) > 1:
+            X_vif = X.loc[:, X.nunique(dropna=True) > 1]
+            if X_vif.shape[1] > 1:
+                vif_values = []
+
+                for variable in X_vif.columns:
+                    try:
+                        other_variables = [col for col in X_vif.columns if col != variable]
+                        vif_model = sm.OLS(X_vif[variable], sm.add_constant(X_vif[other_variables])).fit()
+                        r_squared = vif_model.rsquared
+                        vif_value = np.inf if r_squared >= 0.999999 else 1 / (1 - r_squared)
+                    except Exception:
+                        vif_value = np.inf
+                    vif_values.append(vif_value)
+
+                vif_df = pd.DataFrame({
+                    "Variable": X_vif.columns,
+                    "VIF": vif_values
+                })
+                high_vif_df = vif_df[vif_df["VIF"] >= 5]
+                has_multicollinearity = not high_vif_df.empty
         
         # --- 1. Clean Summary Stats ---
         st.markdown("#### Model Summary Statistics")
@@ -297,6 +324,25 @@ if uploaded_file is not None:
         st.markdown("---")
         st.markdown("### 🧮 Predictive Equation")
         st.markdown(equation_str)
+
+        if has_multicollinearity:
+            high_vif_names = ", ".join(high_vif_df["Variable"].tolist())
+            st.warning(
+                f"**Multicollinearity Warning:** This Multiple Linear Regression (OLS) equation has a multicollinearity issue. "
+                f"The predictor(s) with high VIF are: **{high_vif_names}**. "
+                "This means the OLS equation may be unstable and the individual coefficients/P-values may be misleading. "
+                "Please use the **5. Stepwise Regression** section below for the refined predictive equation."
+            )
+
+            with st.expander("View Multicollinearity Diagnostics (VIF)"):
+                formatted_vif_df = vif_df.style.map(
+                    lambda val: 'background-color: #ffcccc' if val >= 5 else '',
+                    subset=['VIF']
+                ).format({"VIF": "{:.3f}"})
+                st.dataframe(formatted_vif_df, use_container_width=True)
+                st.caption("VIF >= 5 indicates possible multicollinearity; VIF >= 10 indicates severe multicollinearity.")
+        elif len(predictor_vars) > 1:
+            st.success("No major multicollinearity issue detected in the selected predictors based on VIF < 5.")
         
         # Expander for Raw Output
         with st.expander("View Raw OLS Summary (Classic statsmodels output)"):
