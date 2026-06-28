@@ -2045,6 +2045,28 @@ def render_journal_level_model(df):
     )
 
 
+def render_pooled_correlation_explanation():
+    st.markdown("#### How pooled correlation is calculated")
+    st.markdown(
+        "In pooled correlation, all observations from all years are combined in one column-wise dataset. The pest population of each Year-SMW row is paired with the weather value recorded in the same Year-SMW row. For example, mite population during 2010 SMW 32 is correlated with the weather parameters recorded during 2010 SMW 32. The pooled correlation is not an average of year-wise correlations and it is not adjusted for year effect. It only shows the overall association between pest population and weather parameters across all years."
+    )
+
+    example_df = pd.DataFrame({
+        "Year": [2009, 2009, 2010, 2010, 2011, 2011],
+        "SMW": [31, 32, 31, 32, 31, 32],
+        "Pest population": [2.10, 3.40, 2.80, 4.20, 1.90, 3.70],
+        "Tmax": [31.5, 32.2, 30.8, 33.1, 31.0, 32.8],
+    })
+    st.dataframe(example_df, use_container_width=True, hide_index=True)
+
+    st.markdown(
+        "For pooled correlation between pest population and Tmax, the app uses all pest population values and all Tmax values from the same rows and calculates one correlation coefficient."
+    )
+    st.info(
+        "Important: Pooled correlation does not adjust year-to-year variation. For year-adjusted interpretation, use pooled regression with C(Year) or mixed model."
+    )
+
+
 def render_multi_year_analysis(df):
     st.subheader("SECTION 1: Data validation")
     is_valid, validation_message = validate_multi_year_dataset(df)
@@ -2103,6 +2125,7 @@ def render_multi_year_analysis(df):
         mime="text/csv",
         key="download_year_wise_correlation",
     )
+    render_pooled_correlation_explanation()
 
     st.subheader("SECTION 5: Direction consistency table")
     direction_df = build_direction_consistency_table(correlation_numeric_df)
