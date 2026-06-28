@@ -29,6 +29,26 @@ REQUIRED_MULTI_YEAR_COLUMNS = [
     "Rainfall_mm",
 ]
 
+WEATHER_COLUMN_KEYWORDS = [
+    "tmax",
+    "tmin",
+    "temp",
+    "temperature",
+    "rh",
+    "humidity",
+    "wind",
+    "ws",
+    "bssh",
+    "sunshine",
+    "rain",
+    "rainfall",
+    "rf",
+    "vp",
+    "vapour",
+    "vapor",
+    "evap",
+]
+
 
 def build_single_year_sample_data():
     return pd.DataFrame({
@@ -383,11 +403,9 @@ def get_default_multi_year_variables(df, key_prefix):
     ]
 
     default_weather = [
-        col for col in REQUIRED_MULTI_YEAR_COLUMNS
-        if col in weather_options and col not in ["Year", "SMW", "Pest_Population"]
+        col for col in weather_options
+        if any(keyword in str(col).strip().lower() for keyword in WEATHER_COLUMN_KEYWORDS)
     ]
-    if not default_weather:
-        default_weather = weather_options
 
     weather_vars = st.multiselect(
         "Select independent weather variables",
