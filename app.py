@@ -844,6 +844,14 @@ def validate_multi_year_dataset(df):
     return True, "Dataset passed multi-year validation."
 
 
+def is_multi_year_long_format_dataset(df):
+    if df is None or "Year" not in df.columns or "SMW" not in df.columns:
+        return False
+
+    year_series = pd.to_numeric(df["Year"], errors="coerce").dropna()
+    return year_series.nunique() > 1
+
+
 def build_year_wise_population_summary(df, dependent_var):
     summary_rows = []
     working_df = coerce_numeric_columns(df, ["Year", "SMW", dependent_var]).dropna(subset=["Year", "SMW"])
@@ -1805,6 +1813,81 @@ def render_multi_year_analysis(df):
     st.markdown("Use the download buttons shown below each table above to export the generated CSV outputs.")
 
 
+def render_student_requirement_guide():
+    st.subheader("Student Requirement Guide")
+
+    st.markdown("### Analysis Requirement Table")
+    requirement_df = pd.DataFrame({
+        "Section": [
+            "Year-wise peak incidence",
+            "Year-wise correlation",
+            "Pooled correlation",
+            "OLS regression",
+            "Stepwise regression",
+            "VIF/multicollinearity",
+            "Lag correlation",
+            "Year effect model",
+            "Mixed model",
+            "Residual diagnostics",
+            "Model comparison",
+        ],
+        "Ph.D. thesis": [
+            "Required",
+            "Required",
+            "Required",
+            "Required",
+            "Useful",
+            "Required",
+            "Recommended",
+            "Recommended",
+            "Optional",
+            "Recommended",
+            "Optional",
+        ],
+        "High-value journal": [
+            "Required",
+            "Required",
+            "Supporting only",
+            "Supporting only",
+            "Use carefully",
+            "Required",
+            "Required",
+            "Required",
+            "Strongly recommended",
+            "Required",
+            "Required",
+        ],
+    })
+    st.dataframe(requirement_df, use_container_width=True, hide_index=True)
+
+    st.markdown("### Meaning Table")
+    meaning_df = pd.DataFrame({
+        "Term": [
+            "Required",
+            "Recommended",
+            "Useful",
+            "Optional",
+            "Supporting only",
+            "Use carefully",
+            "Strongly recommended",
+        ],
+        "Meaning": [
+            "Must include",
+            "Strongly advisable",
+            "Good to include",
+            "Include only if data are suitable",
+            "Do not make final conclusion only from this analysis",
+            "Result may be unstable; biological meaning must also be considered",
+            "Very important for journal-level statistical strength",
+        ],
+    })
+    st.dataframe(meaning_df, use_container_width=True, hide_index=True)
+
+    st.info(
+        "Correlation and OLS regression are acceptable for thesis-level explanation, but high-value journals usually require year effect, lag analysis, diagnostics and mixed/model comparison support."
+    )
+
+
 render_sidebar()
 
 st.title("Agricultural Correlation & Regression Analysis")
@@ -1813,24 +1896,38 @@ st.markdown("Upload your dataset to generate publication-ready tables, heatmaps,
 uploaded_file = st.file_uploader("Upload your data (CSV or Excel)", type=["csv", "xlsx"])
 
 df = None
+uploaded_is_multi_year = False
 if uploaded_file is not None:
     try:
         df = read_uploaded_dataset(uploaded_file)
+        uploaded_is_multi_year = is_multi_year_long_format_dataset(df)
         st.success("Data loaded successfully.")
+        if uploaded_is_multi_year:
+            st.info(
+                "Multi-year long-format dataset detected. Single-Year analysis is disabled for this upload to avoid misleading results; use the Multi-Year Population Dynamics or Journal-Level Model tabs."
+            )
         with st.expander("Preview Raw Data"):
             st.dataframe(df.head())
     except Exception as exc:
         st.error(f"Failed to read file: {exc}. Check your formatting.")
 
-single_year_tab, multi_year_tab, journal_tab = st.tabs([
+single_year_tab, multi_year_tab, journal_tab, student_guide_tab = st.tabs([
     "Single-Year Population Dynamics",
     "Multi-Year Population Dynamics",
     "Journal-Level Model",
+    "Student Requirement Guide",
 ])
 
 with single_year_tab:
     if df is None:
         st.info("Upload a CSV or Excel file to begin single-year population dynamics analysis.")
+    elif uploaded_is_multi_year:
+        st.warning(
+            "This uploaded file contains 'Year' and 'SMW' with data from more than one year, so it is being treated as a multi-year population dynamics dataset."
+        )
+        st.info(
+            "Single-Year Population Dynamics is not run for multi-year files because it can incorrectly select 'Year' as a variable and produce misleading tables. Please use the Multi-Year Population Dynamics tab, the Journal-Level Model tab, or upload/filter data for one year only."
+        )
     else:
         render_single_year_analysis(df)
 
@@ -1845,3 +1942,6 @@ with journal_tab:
         st.info("Upload a long-format multi-year dataset to run journal-level models.")
     else:
         render_journal_level_model(df)
+
+with student_guide_tab:
+    render_student_requirement_guide()
