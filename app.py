@@ -216,6 +216,119 @@ def get_reference_year_from_model(model, model_df):
     return "automatically selected by statsmodels"
 
 
+def format_year_label(year_value):
+    numeric_value = pd.to_numeric(pd.Series([year_value]), errors="coerce").iloc[0]
+    if pd.notna(numeric_value):
+        return str(int(numeric_value)) if float(numeric_value).is_integer() else str(numeric_value)
+    return str(year_value)
+
+
+def get_year_adjustment_terms(model):
+    adjustment_terms = []
+    if model is None or not hasattr(model, "params"):
+        return adjustment_terms
+
+    for term, coefficient in model.params.items():
+        term_text = str(term)
+        if term_text.startswith("C(Year)[T.") and term_text.endswith("]"):
+            year_value = term_text.replace("C(Year)[T.", "").rstrip("]")
+            year_label = format_year_label(year_value)
+            adjustment_terms.append({
+                "model_term": term_text,
+                "year": year_label,
+                "dummy": f"D{year_label}",
+                "coefficient": coefficient,
+            })
+
+    return adjustment_terms
+
+
+def render_year_adjustment_explanation(model, model_df, key_prefix):
+    st.markdown("#### How to understand Year adjustment in this equation")
+
+    if model is None or model_df is None or "Year" not in model_df.columns:
+        st.info("Year adjustment explanation is available only when a pooled model with C(Year) is fitted successfully.")
+        return
+
+    adjustment_terms = get_year_adjustment_terms(model)
+    year_values = sorted(pd.to_numeric(model_df["Year"], errors="coerce").dropna().unique())
+    year_labels = [format_year_label(year) for year in year_values]
+    base_year = format_year_label(get_reference_year_from_model(model, model_df))
+
+    if not adjustment_terms or len(year_labels) <= 1:
+        st.info("No C(Year) dummy adjustment terms were available in this fitted model.")
+        return
+
+    show_details = st.checkbox(
+        "Show detailed year-adjustment explanation",
+        value=True,
+        key=f"{key_prefix}_show_year_adjustment_explanation",
+    )
+
+    dummy_names = [term["dummy"] for term in adjustment_terms]
+    dummy_examples = " or ".join(dummy_names[:2]) if len(dummy_names) > 1 else dummy_names[0]
+
+    if not show_details:
+        st.info(
+            f"Year was used as a categorical factor. The reference year was {base_year}, and year coefficients adjust baseline pest population compared with this reference year."
+        )
+        return
+
+    st.markdown(
+        f"The pooled multiple regression analysis was carried out by considering Year as a categorical factor to adjust the year-to-year variation in pest population. In this model, the reference year was {base_year}. The year adjustment variables such as {dummy_examples} are dummy variables. Their value is 1 only for that specific year and 0 for other years. Therefore, all year adjustment terms should not be added together. Only the adjustment of the concerned year is added to the equation."
+    )
+
+    dummy_rows = []
+    for year_label in year_labels:
+        dummy_values = [
+            f"{term['dummy']} = {1 if year_label == term['year'] else 0}"
+            for term in adjustment_terms
+        ]
+        if year_label == base_year:
+            meaning = "Reference year"
+        else:
+            meaning = f"{year_label} adjustment is added"
+        dummy_rows.append({
+            "Year": year_label,
+            "Dummy variable value": ", ".join(dummy_values),
+            "Meaning": meaning,
+        })
+    dummy_df = pd.DataFrame(dummy_rows)
+    st.dataframe(dummy_df, use_container_width=True, hide_index=True)
+
+    adjustment_rows = []
+    for term in adjustment_terms:
+        coefficient = term["coefficient"]
+        if pd.isna(coefficient) or not np.isfinite(coefficient):
+            interpretation = "Year adjustment could not be interpreted because the coefficient was not available."
+        elif coefficient > 0:
+            interpretation = f"Baseline pest population was {coefficient:.4f} units higher than reference year after adjusting weather variables."
+        elif coefficient < 0:
+            interpretation = f"Baseline pest population was {abs(coefficient):.4f} units lower than reference year after adjusting weather variables."
+        else:
+            interpretation = "Baseline pest population was similar to the reference year after adjusting weather variables."
+        adjustment_rows.append({
+            "Year adjustment term": term["dummy"],
+            "Coefficient": f"{coefficient:.4f}" if pd.notna(coefficient) and np.isfinite(coefficient) else "NA",
+            "Interpretation": interpretation,
+        })
+    adjustment_df = pd.DataFrame(adjustment_rows)
+    st.dataframe(adjustment_df, use_container_width=True, hide_index=True)
+
+    st.markdown(
+        "The coefficient of each year adjustment indicates the change in baseline pest population in that year compared with the reference year after keeping weather parameters constant. A positive year adjustment indicates higher baseline pest population than the reference year, whereas a negative year adjustment indicates lower baseline pest population."
+    )
+
+    st.warning(
+        "Important: Year adjustment is not a weather effect. It represents year-to-year seasonal variation caused by factors such as rainfall distribution, crop condition, sowing period, natural enemies, pesticide history, microclimate, or other unmeasured seasonal factors."
+    )
+
+    report_text = (
+        f"The pooled multiple regression analysis was carried out by considering Year as a categorical factor to adjust year-to-year variation in pest population. The reference year was {base_year}. The coefficients of the year adjustment variables represented the difference in baseline pest population during respective years as compared to the reference year after adjusting the effect of weather parameters. Therefore, the pooled model suggested that pest population was influenced not only by weather parameters but also by year-to-year seasonal variation."
+    )
+    st.code(report_text, language="text")
+
+
 def build_model_equation_download_text(model, model_formula, equation_text, interpretation, model_label):
     lines = [
         model_label,
@@ -1291,6 +1404,11 @@ def render_pooled_regression(df, dependent_var, weather_vars):
             model_df=pooled_df,
             expander=True,
         )
+        render_year_adjustment_explanation(
+            pooled_model,
+            pooled_df,
+            "multi_pooled_year_effect",
+        )
 
         return pooled_model, display_formula
 
@@ -1739,6 +1857,11 @@ def render_journal_level_model(df):
                 key_prefix="journal_pooled_year_effect",
                 model_df=pooled_model_df,
                 expander=True,
+            )
+            render_year_adjustment_explanation(
+                pooled_model,
+                pooled_model_df,
+                "journal_pooled_year_effect",
             )
             model_records.append({
                 "name": "Pooled OLS with Year effect",
